@@ -1,8 +1,16 @@
 @import "tailwindcss";
 
+/* Use class-based dark mode instead of prefers-color-scheme */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #fafafa;
   --foreground: #171717;
+}
+
+.dark {
+  --background: #09090b;
+  --foreground: #ededed;
 }
 
 @theme inline {
@@ -10,13 +18,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #09090b;
-    --foreground: #ededed;
-  }
 }
 
 body {
@@ -43,13 +44,12 @@ body {
   background: #a1a1aa;
 }
 
-@media (prefers-color-scheme: dark) {
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background: #3f3f46;
-  }
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background: #52525b;
-  }
+.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
 }
 
 /* Animation */

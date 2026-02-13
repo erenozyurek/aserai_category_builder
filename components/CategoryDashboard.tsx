@@ -14,6 +14,7 @@ import {
 import { CategoryTreePanel } from "@/components/CategoryTree";
 import { AseraiPanel } from "@/components/AseraiPanel";
 import { DragOverlayContent } from "@/components/DragOverlayContent";
+import { useTheme } from "@/components/ThemeProvider";
 import { Category, Marketplace } from "@/types/category";
 import {
   ShoppingBag,
@@ -25,6 +26,8 @@ import {
   Save,
   Download,
   CheckCircle2,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 // Deep clone helper
@@ -32,9 +35,9 @@ function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj));
 }
 
-// Generate unique ID
+// Generate unique UUID v4
 function generateId(): string {
-  return `aserai-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return crypto.randomUUID();
 }
 
 // Recursively add category to a parent in the tree
@@ -92,9 +95,9 @@ function convertToAseraiCategory(
     parentId: parentId,
     attributes: sourceCategory.attributes
       ? sourceCategory.attributes.map((attr) => ({
-          ...attr,
-          id: `aserai-attr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        }))
+        ...attr,
+        id: crypto.randomUUID(),
+      }))
       : undefined,
     source_marketplace: marketplace,
   };
@@ -109,6 +112,7 @@ function convertToAseraiCategory(
 }
 
 export default function CategoryDashboard() {
+  const { theme, toggleTheme } = useTheme();
   const [aseraiCategories, setAseraiCategories] = useState<Category[]>([]);
   const [trendyolCategories, setTrendyolCategories] = useState<Category[]>([]);
   const [n11Categories, setN11Categories] = useState<Category[]>([]);
@@ -258,6 +262,44 @@ export default function CategoryDashboard() {
       setSaving(false);
     }
   }, [aseraiCategories, saving, showNotification]);
+
+  // ─── Export Handler ─────────────────────────────────────
+  const handleExport = useCallback(() => {
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      version: savedVersion || 0,
+      aserai: {
+        categories: aseraiCategories,
+        count: countCategories(aseraiCategories),
+      },
+      trendyol: {
+        categories: trendyolCategories,
+        count: countCategories(trendyolCategories),
+      },
+      n11: {
+        categories: n11Categories,
+        count: countCategories(n11Categories),
+      },
+      hepsiburada: {
+        categories: hepsiburadaCategories,
+        count: countCategories(hepsiburadaCategories),
+      },
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `aserai-export-v${savedVersion || 0}-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showNotification(`📦 Export tamamlandı — ${countCategories(aseraiCategories)} Aserai + ${countCategories(trendyolCategories) + countCategories(n11Categories) + countCategories(hepsiburadaCategories)} marketplace kategori`);
+  }, [aseraiCategories, trendyolCategories, n11Categories, hepsiburadaCategories, savedVersion, showNotification]);
 
   // Track unsaved changes
   const markUnsaved = useCallback(() => {
@@ -410,16 +452,46 @@ export default function CategoryDashboard() {
             {hasUnsavedChanges && (
               <span className="text-amber-400 font-medium">● Kaydedilmemiş</span>
             )}
+
+            {/* Theme Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="relative flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700"
+              title={theme === "dark" ? "Açık temaya geç" : "Koyu temaya geç"}
+            >
+              {theme === "dark" ? (
+                <>
+                  <Sun size={14} className="text-amber-400" />
+                  <span className="text-zinc-300">Açık</span>
+                </>
+              ) : (
+                <>
+                  <Moon size={14} className="text-indigo-500" />
+                  <span className="text-zinc-600">Koyu</span>
+                </>
+              )}
+            </button>
+
+            {/* Export Button */}
+            <button
+              onClick={handleExport}
+              disabled={aseraiCategories.length === 0}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Tüm kategorileri JSON olarak dışa aktar"
+            >
+              <Download size={14} className="text-blue-500" />
+              <span className="text-zinc-600 dark:text-zinc-300">Export</span>
+            </button>
+
             <button
               onClick={handleSave}
               disabled={saving || aseraiCategories.length === 0}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                saving
-                  ? "bg-zinc-700 text-zinc-400 cursor-not-allowed"
-                  : hasUnsavedChanges
-                    ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20"
-                    : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700"
-              }`}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${saving
+                ? "bg-zinc-700 text-zinc-400 cursor-not-allowed"
+                : hasUnsavedChanges
+                  ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20"
+                  : "bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-zinc-700"
+                }`}
             >
               {saving ? (
                 <>
