@@ -398,13 +398,33 @@ export default function CategoryDashboard() {
   );
 
   const handleDelete = useCallback(
-    (id: string) => {
+    async (id: string) => {
       if (!confirm("Bu kategoriyi silmek istediğinize emin misiniz?")) return;
-      setAseraiCategories((prev) => removeCategoryFromTree(prev, id));
-      markUnsaved();
-      showNotification("🗑️ Kategori silindi");
+      setAseraiCategories((prev) => {
+        const updated = removeCategoryFromTree(prev, id);
+        // Persist deletion to database
+        fetch("/api/aserai/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tree: updated }),
+        })
+          .then((res) => res.json())
+          .then((json) => {
+            if (json.success) {
+              setSavedVersion(json.version);
+              setHasUnsavedChanges(false);
+              showNotification(`🗑️ Kategori silindi ve kaydedildi (v${json.version})`);
+            } else {
+              showNotification(`🗑️ Kategori silindi ama kaydetme hatası: ${json.error}`);
+            }
+          })
+          .catch(() => {
+            showNotification("🗑️ Kategori silindi ama veritabanına kaydedilemedi");
+          });
+        return updated;
+      });
     },
-    [showNotification, markUnsaved]
+    [showNotification]
   );
 
   // count all categories recursively
