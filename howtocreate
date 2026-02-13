@@ -1,0 +1,182 @@
+GENEL AKIŞ DİYAGRAMI
+Kullanıcı → /dashboard/templates/create (Sayfa)
+  → Pazaryeri seçimi (Trendyol, Hepsiburada, N11, Temu)
+  → MarketplaceColumn bileşeni her pazaryeri için yüklenir
+  → Her kolon kendi API endpoint'ini çağırır
+  → Cache katmanı → Client katmanı → Dış API'ler
+
+  1. SAYFA: Kategori Oluştur
+Dosya: page.tsx
+
+Bu sayfa CreateTemplatePage bileşenidir. 2 aşamadan oluşur:
+
+Aşama 1: Pazaryeri Seçimi
+Kullanıcı hangi pazaryerlerinde kategori oluşturacağını seçer (Trendyol, Hepsiburada, N11, Temu).
+
+Aşama 2: Kategori Seçimi
+Her seçili pazaryeri için bir MarketplaceColumn bileşeni render edilir. Her kolon kendi API'sinden kategorileri çeker.
+
+Marketplace Config tanımları (page.tsx:34-88):
+const MARKETPLACE_CONFIGS: MarketplaceConfig[] = [
+  { id: 'trendyol',    name: 'Trendyol',    icon: '🟠', ... },
+  { id: 'hepsiburada', name: 'Hepsiburada', icon: '🟡', ... },
+  { id: 'n11',         name: 'N11',         icon: '🟣', ... },
+  { id: 'temu',        name: 'Temu',        icon: '🔶', ... },
+];
+
+2. BİLEŞEN: MarketplaceColumn (Kategori Çekme Mantığı)
+Dosya: MarketplaceColumn.tsx
+
+Bu bileşen, her pazaryeri için kategori ağacını çeker. Kritik fonksiyon fetchCategories:
+// MarketplaceColumn.tsx - satır 120-165
+const fetchCategories = useCallback(async () => {
+  setLoading(true);
+  try {
+    let endpoint = '';
+    switch (config.id) {
+      case 'trendyol':
+        endpoint = '/api/v1/trendyol/category-tree';
+        break;
+      case 'hepsiburada':
+        endpoint = '/api/v1/hepsiburada/categories?action=tree';
+        break;
+      case 'n11':
+        endpoint = '/api/v1/n11/categories?action=simpleTree';
+        break;
+      case 'temu':
+        endpoint = '/api/v1/temu/categories?action=tree';
+        break;
+    }
+
+    const response = await fetch(endpoint);
+    const data = await response.json();
+
+    // Normalize: categoryTree / tree / categories
+    let tree: CategoryNode[] = [];
+    if (data.categoryTree) tree = data.categoryTree;
+    else if (data.tree) tree = data.tree;
+    else if (data.categories) tree = data.categories;
+    else if (Array.isArray(data)) tree = data;
+
+    const normalizedTree = normalizeTree(tree);
+    setCategories(normalizedTree);
+  } catch (err) { ... }
+}, [config.id]);
+
+Her marketplace için birer internal Next.js API route çağrılıyor.
+
+3. API ROUTE'LAR VE CACHE KATMANLARI
+🟠 TRENDYOL
+API Route: route.ts
+import { trendyolCache } from '@/lib/integrations/trendyol/cache';
+
+export async function GET() {
+  await trendyolCache.prefetchCategories();
+  const categoryTree = trendyolCache.getCachedCategoryTree();
+  return NextResponse.json({ success: true, categoryTree, count: categoryTree.length });
+}
+Cache: cache.ts → trendyolClient.getCategories() çağırır
+
+Client: client.ts → Gateway proxy üzerinden istek atar
+
+Config & API Keys: config.ts
+
+GATEWAY_URL:           https://gate.dizelweb.com.tr/
+BASE_URL:              https://apigw.trendyol.com
+SELLER_ID:             944254
+API_KEY:               D4MHXiH51nAizADyCw5h
+API_SECRET:            AyjDEMoVdMMgYVzS4Xi2
+AUTH_TOKEN (Base64):   RDRNSFhpSDUxbkFpekFEeUN3NWg6QXlqREVNb1ZkTU1nWVZ6UzRYaTI=
+INTEGRATION_REFERENCE: 36f07439-e79d-46a5-8f90-34dd1f00806c
+Kategori Endpoint:     /integration/product/product-categories
+
+
+İstek nasıl atılıyor:
+Gateway proxy kullanılıyor → https://gate.dizelweb.com.tr/?endpoint=https://apigw.trendyol.com/integration/product/product-categories&method=GET&auth=RDRNSFhpSDUxb...
+
+🟡 HEPSİBURADA
+API Route: route.ts
+import { hepsiburadaCache } from '@/lib/integrations/hepsiburada/cache';
+
+export async function GET(req: Request) {
+  await hepsiburadaCache.prefetchCategories();
+  if (action === 'tree') {
+    const tree = hepsiburadaCache.getCachedCategoryTree();
+    return NextResponse.json({ success: true, tree, count: tree.length });
+  }
+}
+
+Cache: cache.ts → Sayfalı olarak tüm kategorileri çeker
+
+Client: client.ts → Basic Auth ile istek atar
+
+Config & API Keys: config.ts
+BASE_URL (Test):     https://mpop-sit.hepsiburada.com
+PRODUCTION_URL:      https://mpop.hepsiburada.com
+MERCHANT_ID:         3f95e71f-c39e-4266-9eb4-c154807e87f7
+USERNAME:            3f95e71f-c39e-4266-9eb4-c154807e87f7
+PASSWORD:            d8rCXfXqWJW2
+Auth Format:         Basic base64(USERNAME:PASSWORD)
+User-Agent:          aserai_dev
+Kategori Endpoint:   /product/api/categories/get-all-categories?page=0&size=1000&leaf=true&available=true
+
+ N11
+API Route: route.ts
+
+N11 simpleTree action'ı için doğrudan CDN'e istek atar (cache bypass):
+if (action === 'simpleTree') {
+  const response = await fetch('https://api.n11.com/cdn/categories', {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json',
+      'appkey': process.env.N11_APP_KEY || '0b8b3d6e-905b-4f5c-a671-8b00cf9e4916',
+      'appsecret': process.env.N11_APP_SECRET || 'WvbrurmwzjKrCVD2',
+    },
+  });
+  const data = await response.json();
+  return NextResponse.json({ success: true, tree: data.categories || data });
+}
+
+Client: client.ts
+
+Config & API Keys: config.ts
+
+BASE_URL:          https://api.n11.com
+CDN_BASE_URL:      https://api.n11.com
+APP_KEY:           0dd2dc03-aa31-4063-b711-1bc70ca3b9e6  (config default)
+                   0b8b3d6e-905b-4f5c-a671-8b00cf9e4916  (route.ts hardcoded fallback)
+APP_SECRET:        mbV91gBst6hMTBJZ                       (config default)
+                   WvbrurmwzjKrCVD2                        (route.ts hardcoded fallback)
+Auth Header:       appkey + appsecret header'ları (CDN için)
+                   Basic base64(appKey:appSecret) (REST API için)
+Store Username:    testtmagazaa
+Store Password:    Deneme.12345
+INTEGRATOR_NAME:   aserai_dev
+Kategori Endpoint: /cdn/categories
+
+Not: N11'de route.ts içinde hardcoded fallback key'ler ve config.ts'deki key'ler farklı. process.env.N11_APP_KEY set edilmemişse route.ts kendi fallback'ini kullanıyor.
+
+4. CACHE MEKANİZMASI (Her 4 Marketplace Aynı Pattern)
+Her marketplace'in cache'i aynı mantıkla çalışır:
+
+TTL: Kategoriler 1 saat, Özellikler 30 dakika
+Singleton pattern: Global instance, sunucu restart'a kadar cache'te kalır
+Loading lock: Aynı anda birden fazla istek gelirse sadece 1'i API'ye gider, diğerleri bekler
+Flat + Tree: Hem düz liste hem ağaç yapısı oluşturulur
+
+prefetchCategories() → cache geçerli mi?
+  ├─ EVET → cached data dön
+  ├─ HAYIR, loading mi? → loading bitene kadar bekle
+  └─ HAYIR → API'den çek → flatten + buildTree → cache'e yaz → dön
+
+
+  5. TÜM DOSYA HARİTASI
+Katman	Trendyol	Hepsiburada	N11	Temu
+Sayfa	create/page.tsx	←	←	←
+Bileşen	MarketplaceColumn.tsx	←	←	←
+API Route	trendyol/category-tree/route.ts	hepsiburada/categories/route.ts	n11/categories/route.ts	temu/categories/route.ts
+Cache	trendyol/cache.ts	hepsiburada/cache.ts	n11/cache.ts	temu/cache.ts
+Client	trendyol/client.ts	hepsiburada/client.ts	n11/client.ts	temu/client.ts
+Config	trendyol/config.ts	hepsiburada/config.ts	n11/config.ts	temu/config.ts
+
+
