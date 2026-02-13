@@ -355,13 +355,8 @@ export default function CategoryDashboard() {
         addCategoryToTree(prev, targetParentId, newCategory)
       );
       markUnsaved();
-
-      const attrCount = sourceCategory.attributes?.length || 0;
-      showNotification(
-        `✅ "${sourceCategory.name}" eklendi${attrCount > 0 ? ` (${attrCount} attribute ile)` : ""} — Kaynak: ${marketplace}`
-      );
     },
-    [showNotification, markUnsaved]
+    [markUnsaved]
   );
 
   const handleAddRoot = useCallback(() => {
@@ -375,8 +370,7 @@ export default function CategoryDashboard() {
     };
     setAseraiCategories((prev) => [...prev, newCat]);
     markUnsaved();
-    showNotification(`✅ "${name}" ana kategorisi oluşturuldu`);
-  }, [showNotification, markUnsaved]);
+  }, [markUnsaved]);
 
   const handleAddChild = useCallback(
     (parentId: string) => {
@@ -392,14 +386,12 @@ export default function CategoryDashboard() {
         addCategoryToTree(prev, parentId, newCat)
       );
       markUnsaved();
-      showNotification(`✅ "${name}" alt kategorisi eklendi`);
     },
-    [showNotification, markUnsaved]
+    [markUnsaved]
   );
 
   const handleDelete = useCallback(
     async (id: string) => {
-      if (!confirm("Bu kategoriyi silmek istediğinize emin misiniz?")) return;
       setAseraiCategories((prev) => {
         const updated = removeCategoryFromTree(prev, id);
         // Persist deletion to database
@@ -413,18 +405,13 @@ export default function CategoryDashboard() {
             if (json.success) {
               setSavedVersion(json.version);
               setHasUnsavedChanges(false);
-              showNotification(`🗑️ Kategori silindi ve kaydedildi (v${json.version})`);
-            } else {
-              showNotification(`🗑️ Kategori silindi ama kaydetme hatası: ${json.error}`);
             }
           })
-          .catch(() => {
-            showNotification("🗑️ Kategori silindi ama veritabanına kaydedilemedi");
-          });
+          .catch(() => { });
         return updated;
       });
     },
-    [showNotification]
+    []
   );
 
   // count all categories recursively
