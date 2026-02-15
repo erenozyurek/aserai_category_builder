@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 
 // SHA-256 hash of the 15-character access password
 const VALID_HASH =
-    "b2e30d8122b09b2c9d37da94ab09514c333c517e75e559ff559e1d347f92d796";
+    "7b833b2d390fab77929e3b3399863ea7dea87e3035e79103943db487b733ff51";
 
 // Auth token stored in cookie (derived from hash + secret)
 const AUTH_TOKEN = createHash("sha256")

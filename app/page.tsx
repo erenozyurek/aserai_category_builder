@@ -5,7 +5,7 @@ import CategoryDashboard from "@/components/CategoryDashboard";
 
 // Must match the AUTH_TOKEN in /api/auth/verify/route.ts
 const VALID_HASH =
-  "b2e30d8122b09b2c9d37da94ab09514c333c517e75e559ff559e1d347f92d796";
+  "7b833b2d390fab77929e3b3399863ea7dea87e3035e79103943db487b733ff51";
 const AUTH_TOKEN = createHash("sha256")
   .update(`aserai-auth-${VALID_HASH}`)
   .digest("hex");
